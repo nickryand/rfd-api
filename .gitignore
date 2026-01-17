@@ -13,3 +13,6 @@ test-key.json
 gcp.json
 
 node_modules
+.cargo
+.flox
+.rustup
