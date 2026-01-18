@@ -45,7 +45,9 @@ pub struct AppConfig {
     pub auth: AuthConfig,
     pub source: GitHubSourceRepo,
     #[serde(default)]
-    pub static_storage: Vec<StaticStorageConfig>,
+    pub gcs_storage: Vec<GcsStorageConfig>,
+    #[serde(default)]
+    pub s3_storage: Vec<S3StorageConfig>,
     #[serde(default)]
     pub pdf_storage: Option<PdfStorageConfig>,
     #[serde(default)]
@@ -96,8 +98,15 @@ pub struct GitHubSourceRepo {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct StaticStorageConfig {
+pub struct GcsStorageConfig {
     pub bucket: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct S3StorageConfig {
+    pub bucket: String,
+    pub region: String,
+    pub endpoint: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

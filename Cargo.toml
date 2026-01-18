@@ -19,6 +19,8 @@ resolver = "2"
 anyhow = "1.0.100"
 async-bb8-diesel = { git = "https://github.com/oxidecomputer/async-bb8-diesel" }
 async-trait = "0.1.89"
+aws-config = "1"
+aws-sdk-s3 = "1"
 base64 = "0.22"
 bb8 = "0.8.6"
 chrono = "0.4.42"
