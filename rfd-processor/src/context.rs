@@ -203,14 +203,12 @@ async fn build_static_storage(
     let mut storage: Vec<Box<dyn StaticStorage>> = Vec::new();
 
     // Build GCS storage instances
-    if !gcs_entries.is_empty() {
-        let gcs_client = build_gcs_client().await?;
-        for entry in gcs_entries {
-            storage.push(Box::new(GcsStorage {
-                client: gcs_client.clone(),
-                bucket: entry.bucket.clone(),
-            }));
-        }
+    for entry in gcs_entries {
+        let client = build_gcs_client().await?;
+        storage.push(Box::new(GcsStorage {
+            client,
+            bucket: entry.bucket.clone(),
+        }));
     }
 
     // Build S3 storage instances
