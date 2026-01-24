@@ -6,7 +6,7 @@ use rfd_installer::run_migrations;
 
 fn main() {
     if let Ok(url) = std::env::var("DATABASE_URL") {
-        run_migrations(&url, std::env::var("V_ONLY").is_ok());
+        run_migrations(&url);
     } else {
         println!("DATABASE_URL environment variable must be specified to run migrations and must be in the form of a connection string")
     }

@@ -112,3 +112,12 @@ pr-run-mode = "skip"
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+[patch."https://github.com/oxidecomputer/async-bb8-diesel"]
+async-bb8-diesel = {git = "https://github.com/nickryand/async-bb8-diesel", branch = "bump-diesel"}
+
+[patch."https://github.com/oxidecomputer/v-api"]
+v-api = { git = "https://github.com/nickryand/v-api", branch = "pending-migration" }
+v-api-installer = { git = "https://github.com/nickryand/v-api", branch = "pending-migration" }
+v-model = { git = "https://github.com/nickryand/v-api", branch = "pending-migration" }
+v-api-permission-derive = { git = "https://github.com/nickryand/v-api", branch = "pending-migration" }
