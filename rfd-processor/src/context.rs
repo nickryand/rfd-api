@@ -41,8 +41,12 @@ pub type StaticStorageError = Box<dyn std::error::Error + Send + Sync>;
 
 #[async_trait]
 pub trait StaticStorage: Send + Sync {
-    async fn put(&self, key: &str, data: Vec<u8>, content_type: &str)
-        -> Result<(), StaticStorageError>;
+    async fn put(
+        &self,
+        key: &str,
+        data: Vec<u8>,
+        content_type: &str,
+    ) -> Result<(), StaticStorageError>;
     fn name(&self) -> &str;
 }
 
@@ -90,7 +94,7 @@ pub struct Context {
     pub github: GitHubCtx,
     pub actions: Vec<BoxedAction>,
     pub static_storage: Vec<Box<dyn StaticStorage>>,
-    pub pdf: PdfStorageCtx,
+    pub pdf: Option<PdfStorageCtx>,
     pub search: SearchCtx,
 }
 
@@ -170,8 +174,7 @@ impl Context {
                 .iter()
                 .map(|action| action.as_str().try_into())
                 .collect::<Result<Vec<_>, RfdUpdaterError>>()?,
-            static_storage: build_static_storage(&config.gcs_storage, &config.s3_storage)
-                .await?,
+            static_storage: build_static_storage(&config.gcs_storage, &config.s3_storage).await?,
             pdf: PdfStorageCtx::new(&config.pdf_storage).await?,
             search: SearchCtx::new(&config.search_storage)?,
         })
@@ -350,19 +353,16 @@ pub struct PdfStorageCtx {
 }
 
 impl PdfStorageCtx {
-    pub async fn new(config: &Option<PdfStorageConfig>) -> Result<Self, GDriveError> {
-        Ok(Self {
-            // A client is only needed if files are going to be written
-            client: gdrive_client().await?,
-            locations: config
-                .as_ref()
-                .map(|config| {
-                    vec![PdfStorageLocation {
-                        folder_id: config.folder.clone(),
-                    }]
-                })
-                .unwrap_or_default(),
-        })
+    pub async fn new(config: &Option<PdfStorageConfig>) -> Result<Option<Self>, GDriveError> {
+        match config {
+            Some(config) => Ok(Some(Self {
+                client: gdrive_client().await?,
+                locations: vec![PdfStorageLocation {
+                    folder_id: config.folder.clone(),
+                }],
+            })),
+            None => Ok(None),
+        }
     }
 }
 
@@ -415,7 +415,7 @@ impl PdfStorage for PdfStorageCtx {
                 }
             }
             .tap_ok(|_| {
-                tracing::info!("Sucessfully uploaded PDF");
+                tracing::info!("Successfully uploaded PDF");
             })
             .tap_err(|err| {
                 tracing::error!(?err, "Failed to upload PDF");
@@ -585,9 +585,7 @@ pub mod test {
         let mut mock = MockStaticStorage::new();
         mock.expect_put()
             .withf(|key, data, content_type| {
-                key == "expected/key.png"
-                    && data == b"image data"
-                    && content_type == "image/png"
+                key == "expected/key.png" && data == b"image data" && content_type == "image/png"
             })
             .times(1)
             .returning(|_, _, _| Ok(()));
