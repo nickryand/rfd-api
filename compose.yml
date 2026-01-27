@@ -1,0 +1,97 @@
+services:
+  rfd-migration:
+    image: localhost/rfd-api:latest
+    networks:
+      - rfd
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: []
+    working_dir: /home/rfd/db
+    environment:
+      - DATABASE_URL=postgres://rfd:rfd@postgres/rfd
+    command: /usr/local/bin/rfd-installer && diesel migration run && echo "Migrations Complete!"
+
+  rfd-api:
+    image: localhost/rfd-api:latest
+    # Uses default CMD: rfd-api
+    ports:
+      - "8080:8080"
+    environment:
+      # - RFD_API_CONFIG=/config/rfd-api.toml
+      - DATABASE_URL=postgres://rfd:rfd@postgres/rfd
+    command:
+      - /usr/local/bin/rfd-api
+      - /config/rfd-api.toml
+    volumes:
+      - ./config:/config:ro
+    networks:
+      - rfd
+    depends_on:
+      postgres:
+        condition: service_started
+      meilisearch:
+        condition: service_started
+      rfd-migration:
+        condition: service_completed_successfully
+
+  rfd-processor:
+    image: localhost/rfd-api:latest
+
+    # Override CMD to run rfd-processor instead
+    environment:
+      # - RFD_API_CONFIG=/config/rfd-api.toml
+      - DATABASE_URL=postgres://rfd:rfd@postgres/rfd
+    command:
+      - /usr/local/bin/rfd-processor
+      - /config/rfd-processor.toml
+    volumes:
+      - ./config:/config:ro
+    networks:
+      - rfd
+    depends_on:
+      postgres:
+        condition: service_started
+      meilisearch:
+        condition: service_started
+      rfd-migration:
+        condition: service_completed_successfully
+
+  postgres:
+    image: docker.io/postgres:14-trixie
+    environment:
+      POSTGRES_USER: rfd
+      POSTGRES_PASSWORD: rfd
+      POSTGRES_DB: rfd
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - rfd
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rfd"]
+      start_period: 5s
+      start_interval: 1s
+      retries: 10
+      interval: 5s
+
+  meilisearch:
+    image: docker.io/getmeili/meilisearch:v1.11
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: development-master-key
+    volumes:
+      - meilisearch_data:/meili_data
+    ports:
+      - "7700:7700"
+    networks:
+      - rfd
+
+networks:
+  rfd:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  meilisearch_data:
