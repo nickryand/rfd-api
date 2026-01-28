@@ -16,5 +16,6 @@ node_modules
 .cargo
 .flox
 .rustup
-config/
+/config/
 local_data
+.env

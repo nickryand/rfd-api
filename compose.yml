@@ -1,4 +1,22 @@
 services:
+  rfd-site:
+    image: localhost/rfd-site:latest
+    networks:
+      - rfd
+    ports:
+      - "3000:3000"
+    environment:
+      SESSION_SECRET: ${SESSION_SECRET}
+      RFD_API_BACKEND_URL: http://rfd-api:8080
+      RFD_API_FRONTEND_URL: http://localhost:8080
+      RFD_API_CLIENT_ID: ${RFD_API_CLIENT_ID}
+      RFD_API_CLIENT_SECRET: ${RFD_API_CLIENT_SECRET}
+      RFD_API_GITHUB_CALLBACK_URL: http://localhost:3000/auth/github/callback
+      AUTH_PROVIDERS: github
+    # depends_on:
+    #   rfd-api:
+    #     condition: service_started
+
   rfd-migration:
     image: localhost/rfd-api:latest
     networks:
