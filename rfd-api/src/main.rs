@@ -73,6 +73,17 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Initialized logger");
 
+    // Resolve path-based secrets for asymmetric keys
+    let resolved_keys: Vec<_> = config
+        .keys
+        .into_iter()
+        .map(|key| {
+            key.resolve().tap_err(|err| {
+                tracing::error!(?err, "Failed to resolve asymmetric key secret");
+            })
+        })
+        .collect::<Result<_, _>>()?;
+
     let mut v_ctx = VContext::new(
         config.public_url.clone(),
         Arc::new(
@@ -83,19 +94,24 @@ async fn main() -> anyhow::Result<()> {
                 })?,
         ),
         config.jwt,
-        config.keys,
+        resolved_keys,
     )
     .await?;
 
     if let Some(github) = config.authn.oauth.github {
+        let device_client_id = github.device.client_id.resolve()?;
+        let device_client_secret = github.device.client_secret.resolve()?;
+        let web_client_id = github.web.client_id.resolve()?;
+        let web_client_secret = github.web.client_secret.resolve()?;
+
         v_ctx.insert_oauth_provider(
             OAuthProviderName::GitHub,
             Box::new(move || {
                 Box::new(GitHubOAuthProvider::new(
-                    github.device.client_id.clone(),
-                    github.device.client_secret.clone(),
-                    github.web.client_id.clone(),
-                    github.web.client_secret.clone(),
+                    device_client_id.clone(),
+                    device_client_secret.clone().into(),
+                    web_client_id.clone(),
+                    web_client_secret.clone().into(),
                     None,
                 ))
             }),
@@ -105,14 +121,19 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if let Some(google) = config.authn.oauth.google {
+        let device_client_id = google.device.client_id.resolve()?;
+        let device_client_secret = google.device.client_secret.resolve()?;
+        let web_client_id = google.web.client_id.resolve()?;
+        let web_client_secret = google.web.client_secret.resolve()?;
+
         v_ctx.insert_oauth_provider(
             OAuthProviderName::Google,
             Box::new(move || {
                 Box::new(GoogleOAuthProvider::new(
-                    google.device.client_id.clone(),
-                    google.device.client_secret.clone(),
-                    google.web.client_id.clone(),
-                    google.web.client_secret.clone(),
+                    device_client_id.clone(),
+                    device_client_secret.clone().into(),
+                    web_client_id.clone(),
+                    web_client_secret.clone().into(),
                     None,
                 ))
             }),
@@ -147,10 +168,9 @@ async fn main() -> anyhow::Result<()> {
         if let Some(service) = &config.magic_link.email_service {
             match service {
                 EmailService::Resend { key } => {
-                    v_ctx.magic_link.set_messenger(
-                        target,
-                        ResendMagicLink::new(key.to_string(), template.from),
-                    );
+                    v_ctx
+                        .magic_link
+                        .set_messenger(target, ResendMagicLink::new(key.resolve()?, template.from));
                 }
             }
         }

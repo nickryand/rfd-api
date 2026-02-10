@@ -7,10 +7,134 @@ use std::{collections::HashMap, path::PathBuf};
 use config::{Config, ConfigError, Environment, File};
 use rfd_data::content::RfdTemplate;
 use serde::Deserialize;
-use v_api::config::{AsymmetricKey, AuthnProviders, JwtConfig};
+use v_api::config::{AsymmetricKey, JwtConfig};
 use v_model::schema_ext::MagicLinkMedium;
 
+use rfd_secret::{SecretResolutionError, SecretString};
+
 use crate::server::SpecConfig;
+
+// ============================================================================
+// Wrapper types for v_api configuration with SecretString support
+// ============================================================================
+
+/// Wrapper for v_api::config::AsymmetricKey that supports path-based secrets.
+///
+/// Use `resolve()` to convert to the actual v_api AsymmetricKey type.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AsymmetricKeyConfig {
+    LocalSigner {
+        kid: String,
+        private: SecretString,
+    },
+    LocalVerifier {
+        kid: String,
+        public: SecretString,
+    },
+    CkmsSigner {
+        kid: String,
+        version: u16,
+        key: String,
+        keyring: String,
+        location: String,
+        project: String,
+    },
+    CkmsVerifier {
+        kid: String,
+        version: u16,
+        key: String,
+        keyring: String,
+        location: String,
+        project: String,
+    },
+}
+
+impl AsymmetricKeyConfig {
+    /// Resolves any path-based secrets and converts to v_api AsymmetricKey.
+    pub fn resolve(self) -> Result<AsymmetricKey, SecretResolutionError> {
+        match self {
+            AsymmetricKeyConfig::LocalSigner { kid, private } => Ok(AsymmetricKey::LocalSigner {
+                kid,
+                private: private.resolve()?,
+            }),
+            AsymmetricKeyConfig::LocalVerifier { kid, public } => Ok(AsymmetricKey::LocalVerifier {
+                kid,
+                public: public.resolve()?,
+            }),
+            AsymmetricKeyConfig::CkmsSigner {
+                kid,
+                version,
+                key,
+                keyring,
+                location,
+                project,
+            } => Ok(AsymmetricKey::CkmsSigner {
+                kid,
+                version,
+                key,
+                keyring,
+                location,
+                project,
+            }),
+            AsymmetricKeyConfig::CkmsVerifier {
+                kid,
+                version,
+                key,
+                keyring,
+                location,
+                project,
+            } => Ok(AsymmetricKey::CkmsVerifier {
+                kid,
+                version,
+                key,
+                keyring,
+                location,
+                project,
+            }),
+        }
+    }
+}
+
+/// OAuth client configuration with SecretString support.
+#[derive(Debug, Clone, Deserialize)]
+pub struct OAuthClientConfig {
+    pub client_id: SecretString,
+    pub client_secret: SecretString,
+}
+
+/// OAuth web client configuration with SecretString support.
+#[derive(Debug, Clone, Deserialize)]
+pub struct OAuthWebClientConfig {
+    pub client_id: SecretString,
+    pub client_secret: SecretString,
+    pub redirect_uri: String,
+}
+
+/// Per-provider OAuth configuration with device and web clients.
+#[derive(Debug, Clone, Deserialize)]
+pub struct OAuthProviderConfig {
+    pub device: OAuthClientConfig,
+    pub web: OAuthWebClientConfig,
+}
+
+/// OAuth providers configuration wrapper.
+#[derive(Debug, Default, Deserialize)]
+pub struct OAuthProvidersConfig {
+    pub github: Option<OAuthProviderConfig>,
+    pub google: Option<OAuthProviderConfig>,
+}
+
+/// Authentication providers configuration wrapper.
+#[derive(Debug, Default, Deserialize)]
+pub struct AuthnProvidersConfig {
+    #[serde(default)]
+    pub oauth: OAuthProvidersConfig,
+}
+
+// ============================================================================
+// Main application configuration
+// ============================================================================
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
@@ -21,10 +145,10 @@ pub struct AppConfig {
     pub public_url: String,
     pub server_port: u16,
     pub database_url: String,
-    pub keys: Vec<AsymmetricKey>,
+    pub keys: Vec<AsymmetricKeyConfig>,
     pub jwt: JwtConfig,
     pub spec: Option<SpecConfig>,
-    pub authn: AuthnProviders,
+    pub authn: AuthnProvidersConfig,
     pub magic_link: MagicLinkConfig,
     pub search: SearchConfig,
     pub content: ContentConfig,
@@ -41,7 +165,7 @@ pub enum ServerLogFormat {
 #[derive(Debug, Default, Deserialize)]
 pub struct SearchConfig {
     pub host: String,
-    pub key: String,
+    pub key: SecretString,
     pub index: String,
 }
 
@@ -70,10 +194,10 @@ pub enum GitHubAuthConfig {
     Installation {
         app_id: i64,
         installation_id: i64,
-        private_key: String,
+        private_key: SecretString,
     },
     User {
-        token: String,
+        token: SecretString,
     },
 }
 
@@ -97,7 +221,7 @@ pub struct MagicLinkTemplate {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EmailService {
-    Resend { key: String },
+    Resend { key: SecretString },
 }
 
 impl AppConfig {

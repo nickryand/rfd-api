@@ -4,6 +4,7 @@
 
 use config::{Config, ConfigError, Environment, File};
 use processor::{processor, JobError};
+use rfd_secret::SecretString;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -83,10 +84,10 @@ pub enum GitHubAuthConfig {
     Installation {
         app_id: i64,
         installation_id: i64,
-        private_key: String,
+        private_key: SecretString,
     },
     User {
-        token: String,
+        token: SecretString,
     },
 }
 
@@ -119,7 +120,7 @@ pub struct PdfStorageConfig {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SearchConfig {
     pub host: String,
-    pub key: String,
+    pub key: SecretString,
     pub index: String,
 }
 
