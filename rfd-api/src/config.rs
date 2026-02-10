@@ -144,7 +144,7 @@ pub struct AppConfig {
     pub initial_mappers: Option<String>,
     pub public_url: String,
     pub server_port: u16,
-    pub database_url: String,
+    pub database: DatabaseConfig,
     pub keys: Vec<AsymmetricKeyConfig>,
     pub jwt: JwtConfig,
     pub spec: Option<SpecConfig>,
@@ -167,6 +167,25 @@ pub struct SearchConfig {
     pub host: String,
     pub key: SecretString,
     pub index: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DatabaseConfig {
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub password: SecretString,
+    pub database: String,
+}
+
+impl DatabaseConfig {
+    pub fn to_url(&self) -> Result<String, SecretResolutionError> {
+        let password = self.password.resolve()?;
+        Ok(format!(
+            "postgres://{}:{}@{}:{}/{}",
+            self.user, password, self.host, self.port, self.database
+        ))
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]

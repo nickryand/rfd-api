@@ -23,8 +23,16 @@ scanner_enabled = true
 # How often the processor scanner should check the remote GitHub repo for RFDs
 scanner_interval = 900
 
-# The internal database url to store RFD information
-database_url = "postgres://<user>:<pass>@<host>/<database>"
+# Database connection configuration
+# Password can be specified inline or read from a file:
+#   Inline:    password = "your-password"
+#   From file: password = { path = "/run/secrets/db-password" }
+[database]
+host = "localhost"
+port = 5432
+user = "rfd"
+password = ""
+database = "rfd"
 
 # The list of actions that should be run for each processing job
 actions = [

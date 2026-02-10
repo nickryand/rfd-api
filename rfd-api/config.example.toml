@@ -16,8 +16,16 @@ public_url = ""
 # the server is running behind a proxy)
 server_port = 8080
 
-# Full url of the Postgres database to connect to
-database_url = "postgres://<user>:<pass>@<host>/<database>"
+# Database connection configuration
+# Password can be specified inline or read from a file:
+#   Inline:    password = "your-password"
+#   From file: password = { path = "/run/secrets/db-password" }
+[database]
+host = "localhost"
+port = 5432
+user = "rfd"
+password = ""
+database = "rfd"
 
 # Settings for JWT management
 [jwt]

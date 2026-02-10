@@ -84,10 +84,15 @@ async fn main() -> anyhow::Result<()> {
         })
         .collect::<Result<_, _>>()?;
 
+    // Resolve database URL from config
+    let database_url = config.database.to_url().tap_err(|err| {
+        tracing::error!(?err, "Failed to resolve database password secret");
+    })?;
+
     let mut v_ctx = VContext::new(
         config.public_url.clone(),
         Arc::new(
-            VApiPostgresStore::new(&config.database_url)
+            VApiPostgresStore::new(&database_url)
                 .await
                 .tap_err(|err| {
                     tracing::error!(?err, "Failed to establish initial database connection");
@@ -182,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
     let context = RfdContext::new(
         config.public_url,
         Arc::new(
-            VApiPostgresStore::new(&config.database_url)
+            VApiPostgresStore::new(&database_url)
                 .await
                 .tap_err(|err| {
                     tracing::error!(?err, "Failed to establish initial database connection");
