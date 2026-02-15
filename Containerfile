@@ -21,10 +21,12 @@ COPY rfd-api ./rfd-api
 COPY rfd-cli ./rfd-cli
 COPY rfd-data ./rfd-data
 COPY rfd-github ./rfd-github
+COPY rfd-kube-init ./rfd-kube-init
 COPY rfd-installer ./rfd-installer
 COPY rfd-model ./rfd-model
 COPY rfd-processor ./rfd-processor
 COPY rfd-sdk ./rfd-sdk
+COPY rfd-secret ./rfd-secret
 COPY trace-request ./trace-request
 COPY xtask ./xtask
 
@@ -35,7 +37,8 @@ RUN  cargo build --release \
     --package rfd-api \
     --package rfd-processor \
     --package rfd-cli \
-    --package rfd-installer
+    --package rfd-installer \
+    --package rfd-kube-init
 
 # Download diesel tool for migrations
 WORKDIR /tmp
@@ -66,6 +69,7 @@ COPY --from=builder /app/target/release/rfd-api /usr/local/bin/
 COPY --from=builder /app/target/release/rfd-processor /usr/local/bin/
 COPY --from=builder /app/target/release/rfd-cli /usr/local/bin/
 COPY --from=builder /app/target/release/rfd-installer /usr/local/bin/
+COPY --from=builder /app/target/release/rfd-kube-init /usr/local/bin/
 
 # Database migrations for diesel
 COPY --from=builder /tmp/diesel /usr/local/bin/
