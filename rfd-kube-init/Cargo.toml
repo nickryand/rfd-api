@@ -1,0 +1,26 @@
+[package]
+name = "rfd-kube-init"
+version = "0.1.0"
+edition = "2021"
+description = "Kubernetes initialization tool for RFD services"
+repository = "https://github.com/oxidecomputer/rfd-api"
+
+[[bin]]
+name = "rfd-kube-init"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }
+k8s-openapi = { workspace = true }
+kube = { workspace = true }
+meilisearch-sdk = { workspace = true }
+secrecy = { workspace = true }
+serde_json = { workspace = true }
+time = "0.3"
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[package.metadata.dist]
+targets = []
