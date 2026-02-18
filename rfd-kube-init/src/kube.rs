@@ -10,15 +10,18 @@ use kube::{
 };
 use secrecy::SecretString;
 use std::collections::BTreeMap;
+use tracing::{debug, instrument};
 
 /// Read a specific key from a Kubernetes secret.
 /// Returns the value wrapped in a SecretString to protect it in memory.
+#[instrument(skip(client), fields(namespace = %namespace, secret_name = %secret_name, key = %key))]
 pub async fn read_secret_key(
     client: &Client,
     namespace: &str,
     secret_name: &str,
     key: &str,
 ) -> Result<SecretString> {
+    debug!("Reading secret key from Kubernetes");
     let secrets: Api<Secret> = Api::namespaced(client.clone(), namespace);
     let secret = secrets.get(secret_name).await?;
 
@@ -40,18 +43,21 @@ pub async fn read_secret_key(
     let value_str = String::from_utf8(value_bytes.0.clone())
         .map_err(|_| anyhow!("Secret key '{}' is not valid UTF-8", key))?;
 
+    debug!("Successfully read secret key");
     Ok(SecretString::from(value_str))
 }
 
 /// Write key-value pairs to a Kubernetes secret.
 /// Creates the secret if it doesn't exist, patches if it does.
 /// Uses server-side apply for idempotent create-or-update behavior.
+#[instrument(skip(client, data), fields(namespace = %namespace, secret_name = %secret_name, key_count = data.len()))]
 pub async fn write_secret(
     client: &Client,
     namespace: &str,
     secret_name: &str,
     data: &[(&str, &str)],
 ) -> Result<()> {
+    debug!("Writing secret to Kubernetes");
     let secrets: Api<Secret> = Api::namespaced(client.clone(), namespace);
 
     let mut string_data = BTreeMap::new();
@@ -78,5 +84,6 @@ pub async fn write_secret(
         )
         .await?;
 
+    debug!("Successfully wrote secret");
     Ok(())
 }

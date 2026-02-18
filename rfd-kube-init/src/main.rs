@@ -7,6 +7,7 @@ mod meilisearch;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use tracing_subscriber::{filter::LevelFilter, EnvFilter};
 
 use crate::meilisearch::MeilisearchArgs;
 
@@ -26,14 +27,30 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .with_writer(std::io::stdout)
+        .init();
+
+    tracing::info!("Starting rfd-kube-init");
 
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Meilisearch(args) => {
+            tracing::info!("Running meilisearch initialization");
+            tracing::debug!("Initializing Kubernetes client");
             let kube_client = ::kube::Client::try_default().await?;
-            meilisearch::init(&kube_client, &args).await
+            tracing::debug!("Kubernetes client initialized");
+            let result = meilisearch::init(&kube_client, &args).await;
+            if result.is_ok() {
+                tracing::info!("Meilisearch initialization completed successfully");
+            }
+            result
         }
     }
 }

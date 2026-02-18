@@ -32,13 +32,15 @@ COPY xtask ./xtask
 
 ENV CARGO_HOME=/data/cargo
 
-# Build all target binaries in release mode
-RUN  cargo build --release \
+# Build workspace binaries in release mode
+RUN cargo build --release \
     --package rfd-api \
     --package rfd-processor \
     --package rfd-cli \
-    --package rfd-installer \
-    --package rfd-kube-init
+    --package rfd-installer
+
+# Build rfd-kube-init separately (excluded from workspace to avoid feature conflicts)
+RUN cd rfd-kube-init && cargo build --release
 
 # Download diesel tool for migrations
 WORKDIR /tmp
@@ -69,7 +71,7 @@ COPY --from=builder /app/target/release/rfd-api /usr/local/bin/
 COPY --from=builder /app/target/release/rfd-processor /usr/local/bin/
 COPY --from=builder /app/target/release/rfd-cli /usr/local/bin/
 COPY --from=builder /app/target/release/rfd-installer /usr/local/bin/
-COPY --from=builder /app/target/release/rfd-kube-init /usr/local/bin/
+COPY --from=builder /app/rfd-kube-init/target/release/rfd-kube-init /usr/local/bin/
 
 # Database migrations for diesel
 COPY --from=builder /tmp/diesel /usr/local/bin/

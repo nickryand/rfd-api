@@ -104,20 +104,36 @@ impl fmt::Display for FailedNamespace {
 
 /// Fetch API keys from Meilisearch and return the search and admin keys.
 async fn get_api_keys(client: &Client) -> Result<(Option<Key>, Option<Key>)> {
+    tracing::debug!("Fetching API keys from Meilisearch");
     let keys_result = client
         .get_keys()
         .await
         .context("Failed to fetch API keys from Meilisearch")?;
+
+    tracing::debug!(key_count = keys_result.results.len(), "Retrieved API keys from Meilisearch");
 
     let mut search_key = None;
     let mut admin_key = None;
 
     for key in keys_result.results {
         match key.name.as_deref() {
-            Some(DEFAULT_SEARCH_API_KEY_NAME) => search_key = Some(key),
-            Some(DEFAULT_ADMIN_API_KEY_NAME) => admin_key = Some(key),
+            Some(DEFAULT_SEARCH_API_KEY_NAME) => {
+                tracing::debug!("Found default search API key");
+                search_key = Some(key);
+            }
+            Some(DEFAULT_ADMIN_API_KEY_NAME) => {
+                tracing::debug!("Found default admin API key");
+                admin_key = Some(key);
+            }
             _ => {}
         }
+    }
+
+    if search_key.is_none() {
+        tracing::warn!("Default search API key not found");
+    }
+    if admin_key.is_none() {
+        tracing::warn!("Default admin API key not found");
     }
 
     Ok((search_key, admin_key))
@@ -135,8 +151,15 @@ async fn generate_and_distribute_token(
     token_type: TokenType,
 ) -> Result<Vec<FailedNamespace>> {
     if namespaces.is_empty() {
+        tracing::debug!(token_type = %token_type, "No namespaces configured, skipping");
         return Ok(Vec::new());
     }
+
+    tracing::info!(
+        token_type = %token_type,
+        namespace_count = namespaces.len(),
+        "Distributing tokens to namespaces"
+    );
 
     let token_type_str = token_type.to_string();
     let key_name = token_type.key_name();
@@ -265,6 +288,11 @@ pub async fn init(kube_client: &::kube::Client, args: &MeilisearchArgs) -> Resul
 
     if !failures.is_empty() {
         let failed_list: Vec<String> = failures.iter().map(|f| f.to_string()).collect();
+        tracing::error!(
+            failed_count = failures.len(),
+            failed_namespaces = %failed_list.join(", "),
+            "Failed to write secrets to some namespaces"
+        );
         return Err(anyhow!(
             "Failed to write secrets to namespaces: {}",
             failed_list.join(", ")
@@ -272,4 +300,33 @@ pub async fn init(kube_client: &::kube::Client, args: &MeilisearchArgs) -> Resul
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use meilisearch_sdk::client::Client;
+
+    /// Test that crypto providers are properly configured.
+    /// This exercises both jsonwebtoken (JWT signing) and rustls (TLS) crypto backends.
+    #[test]
+    fn test_crypto_providers_configured() {
+        // Create a meilisearch client - this validates rustls crypto provider is available
+        let client = Client::new("http://localhost:7700", Some("test_master_key"))
+            .expect("Failed to create meilisearch client");
+
+        // Generate a tenant token - this exercises jsonwebtoken crypto
+        // We use a fake UID but the signing operation still runs
+        let search_rules = serde_json::json!(["*"]);
+        let fake_uid = "550e8400-e29b-41d4-a716-446655440000".to_string();
+
+        let result = client.generate_tenant_token(fake_uid, search_rules, None, None);
+
+        // The token generation should succeed (crypto works) even though
+        // the key UID is fake - we're testing the signing, not validation
+        assert!(result.is_ok(), "JWT token generation failed: {:?}", result.err());
+
+        let token = result.unwrap();
+        // JWT tokens have 3 parts separated by dots
+        assert_eq!(token.split('.').count(), 3, "Generated token should be a valid JWT format");
+    }
 }
