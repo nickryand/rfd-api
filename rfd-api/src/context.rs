@@ -63,6 +63,7 @@ pub struct RfdContext {
     pub github: GitHubRfdRepo,
 
     v_context: Arc<VContext<RfdPermission>>,
+    v_storage: Arc<dyn v_api::VApiStorage<RfdPermission>>,
 }
 
 impl ApiContext for RfdContext {
@@ -294,6 +295,7 @@ impl RfdContext {
         content: ContentConfig,
         services: ServicesConfig,
         v_context: VContext<RfdPermission>,
+        v_storage: Arc<dyn v_api::VApiStorage<RfdPermission>>,
     ) -> Result<Self, AppError> {
         let http = reqwest::Client::builder()
             .build()
@@ -365,7 +367,13 @@ impl RfdContext {
             )
             .await?,
             v_context: Arc::new(v_context),
+            v_storage,
         })
+    }
+
+    /// Access to v-api storage for direct storage operations (e.g., bootstrap)
+    pub fn v_storage(&self) -> &dyn v_api::VApiStorage<RfdPermission> {
+        &*self.v_storage
     }
 
     // RFD Operations
@@ -999,9 +1007,11 @@ pub(crate) mod test_mocks {
             public: pub_key.to_public_key_pem(LineEnding::LF).unwrap(),
         };
 
+        let v_storage: Arc<PostgresStore> = Arc::new(PostgresStore::new("").await.unwrap());
+
         let mut v_context = VContext::new(
             String::new(),
-            Arc::new(PostgresStore::new("").await.unwrap()),
+            v_storage.clone(),
             JwtConfig {
                 default_expiration: 0,
             },
@@ -1039,6 +1049,7 @@ pub(crate) mod test_mocks {
                 },
             },
             v_context,
+            v_storage,
         )
         .await
         .unwrap();

@@ -89,15 +89,18 @@ async fn main() -> anyhow::Result<()> {
         tracing::error!(?err, "Failed to resolve database password secret");
     })?;
 
+    // Create shared storage for v-api (also implements RfdStorage)
+    let v_storage: Arc<VApiPostgresStore> = Arc::new(
+        VApiPostgresStore::new(&database_url)
+            .await
+            .tap_err(|err| {
+                tracing::error!(?err, "Failed to establish initial database connection");
+            })?,
+    );
+
     let mut v_ctx = VContext::new(
         config.public_url.clone(),
-        Arc::new(
-            VApiPostgresStore::new(&database_url)
-                .await
-                .tap_err(|err| {
-                    tracing::error!(?err, "Failed to establish initial database connection");
-                })?,
-        ),
+        v_storage.clone(),
         config.jwt,
         resolved_keys,
     )
@@ -186,17 +189,12 @@ async fn main() -> anyhow::Result<()> {
 
     let context = RfdContext::new(
         config.public_url,
-        Arc::new(
-            VApiPostgresStore::new(&database_url)
-                .await
-                .tap_err(|err| {
-                    tracing::error!(?err, "Failed to establish initial database connection");
-                })?,
-        ),
+        v_storage.clone(),
         config.search,
         config.content,
         config.services,
         v_ctx,
+        v_storage,
     )
     .await?;
 
