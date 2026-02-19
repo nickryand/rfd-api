@@ -41,11 +41,6 @@ pub struct OAuthInitArgs {
     secret_name: String,
 }
 
-struct FailedNamespace {
-    namespace: String,
-    error: String,
-}
-
 /// Initialize OAuth client and distribute credentials to target namespaces.
 pub async fn init(kube_client: &::kube::Client, args: &OAuthInitArgs) -> Result<()> {
     if args.redirect_uris.is_empty() {
@@ -87,12 +82,15 @@ pub async fn init(kube_client: &::kube::Client, args: &OAuthInitArgs) -> Result<
             tracing::warn!("System already initialized (409 Conflict), skipping");
             return Ok(());
         }
-        s if s.is_success() => response
+        reqwest::StatusCode::OK => response
             .json()
             .await
             .context("Failed to parse /init response")?,
         _ => {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             tracing::error!(status = %status, error = %error_text, "Failed to initialize OAuth client");
             return Err(anyhow!(
                 "Failed to initialize OAuth client: {} - {}",
@@ -131,10 +129,7 @@ pub async fn init(kube_client: &::kube::Client, args: &OAuthInitArgs) -> Result<
                 );
             }
             Err(err) => {
-                failures.push(FailedNamespace {
-                    namespace: ns.clone(),
-                    error: err.to_string(),
-                });
+                failures.push(ns.clone());
                 tracing::error!(
                     namespace = ns.as_str(),
                     secret = args.secret_name.as_str(),
@@ -146,25 +141,11 @@ pub async fn init(kube_client: &::kube::Client, args: &OAuthInitArgs) -> Result<
     }
 
     if !failures.is_empty() {
-        let failed_list: Vec<String> = failures
-            .iter()
-            .map(|f| format!("{}({})", f.namespace, f.error))
-            .collect();
-        tracing::error!(
-            failed_count = failures.len(),
-            failed_namespaces = %failed_list.join(", "),
-            "Failed to write secrets to some namespaces"
-        );
         return Err(anyhow!(
             "Failed to write secrets to namespaces: {}",
-            failures.iter().map(|f| f.namespace.as_str()).collect::<Vec<_>>().join(", ")
+            failures.join(", ")
         ));
     }
-
-    tracing::info!(
-        namespace_count = args.target_namespaces.len(),
-        "OAuth client credentials distributed successfully"
-    );
 
     Ok(())
 }
