@@ -28,14 +28,14 @@ use crate::context::RfdContext;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct InitRequestBody {
-    pub redirect_uri: String,
+    pub redirect_uris: Vec<String>,
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct InitResponse {
     pub client_id: TypedUuid<OAuthClientId>,
     pub secret: String,
-    pub redirect_uri: String,
+    pub redirect_uris: Vec<String>,
 }
 
 /// Initialize the system with an initial OAuth client.
@@ -114,20 +114,22 @@ pub async fn init_op(
         to_internal_error(e)
     })?;
 
-    // Step 4: Add the redirect URI
-    OAuthClientRedirectUriStore::upsert(
-        ctx.v_storage(),
-        NewOAuthClientRedirectUri {
-            id: TypedUuid::new_v4(),
-            oauth_client_id: client.id,
-            redirect_uri: body.redirect_uri.clone(),
-        },
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(?e, "Failed to add redirect URI");
-        to_internal_error(e)
-    })?;
+    // Step 4: Add all redirect URIs
+    for redirect_uri in &body.redirect_uris {
+        OAuthClientRedirectUriStore::upsert(
+            ctx.v_storage(),
+            NewOAuthClientRedirectUri {
+                id: TypedUuid::new_v4(),
+                oauth_client_id: client.id,
+                redirect_uri: redirect_uri.clone(),
+            },
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, ?redirect_uri, "Failed to add redirect URI");
+            to_internal_error(e)
+        })?;
+    }
 
     // Step 5: Write the initialization record
     let init_record = InitializationModel {
@@ -151,7 +153,7 @@ pub async fn init_op(
     Ok(HttpResponseCreated(InitResponse {
         client_id: client.id,
         secret: secret.key().expose_secret().to_string(),
-        redirect_uri: body.redirect_uri,
+        redirect_uris: body.redirect_uris,
     }))
 }
 
