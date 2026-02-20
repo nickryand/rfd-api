@@ -4,7 +4,6 @@
 
 pub static UNLIMITED: i64 = 9999999;
 
-pub mod init;
 pub mod job;
 pub mod rfd;
 pub mod webhook;

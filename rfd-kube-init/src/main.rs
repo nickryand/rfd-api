@@ -4,14 +4,12 @@
 
 mod kube;
 mod meilisearch;
-mod oauth_init;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::{filter::LevelFilter, EnvFilter};
 
 use crate::meilisearch::MeilisearchArgs;
-use crate::oauth_init::OAuthInitArgs;
 
 #[derive(Parser)]
 #[command(name = "rfd-kube-init")]
@@ -25,8 +23,6 @@ struct Cli {
 enum Commands {
     /// Initialize Meilisearch secrets across target namespaces
     Meilisearch(MeilisearchArgs),
-    /// Initialize OAuth client and distribute credentials to target namespaces
-    OauthInit(OAuthInitArgs),
 }
 
 #[tokio::main]
@@ -53,17 +49,6 @@ async fn main() -> Result<()> {
             let result = meilisearch::init(&kube_client, &args).await;
             if result.is_ok() {
                 tracing::info!("Meilisearch initialization completed successfully");
-            }
-            result
-        }
-        Commands::OauthInit(args) => {
-            tracing::info!("Running OAuth client initialization");
-            tracing::debug!("Initializing Kubernetes client");
-            let kube_client = ::kube::Client::try_default().await?;
-            tracing::debug!("Kubernetes client initialized");
-            let result = oauth_init::init(&kube_client, &args).await;
-            if result.is_ok() {
-                tracing::info!("OAuth client initialization completed successfully");
             }
             result
         }
