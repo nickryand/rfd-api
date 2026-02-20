@@ -58,10 +58,12 @@ impl AsymmetricKeyConfig {
                 kid,
                 private: private.resolve()?,
             }),
-            AsymmetricKeyConfig::LocalVerifier { kid, public } => Ok(AsymmetricKey::LocalVerifier {
-                kid,
-                public: public.resolve()?,
-            }),
+            AsymmetricKeyConfig::LocalVerifier { kid, public } => {
+                Ok(AsymmetricKey::LocalVerifier {
+                    kid,
+                    public: public.resolve()?,
+                })
+            }
             AsymmetricKeyConfig::CkmsSigner {
                 kid,
                 version,
@@ -108,7 +110,7 @@ pub struct OAuthClientConfig {
 pub struct OAuthWebClientConfig {
     pub client_id: SecretString,
     pub client_secret: SecretString,
-    pub redirect_uri: String,
+    // pub redirect_uri: String,
 }
 
 /// Per-provider OAuth configuration with device and web clients.

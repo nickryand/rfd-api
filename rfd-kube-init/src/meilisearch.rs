@@ -8,7 +8,9 @@ use meilisearch_sdk::client::Client;
 use meilisearch_sdk::key::Key;
 use secrecy::ExposeSecret;
 use std::fmt;
+use std::time::Duration as StdDuration;
 use time::{Duration, OffsetDateTime};
+use tokio::time::sleep;
 
 use crate::kube;
 
@@ -77,6 +79,10 @@ pub struct MeilisearchArgs {
 
     #[command(flatten)]
     namespaces: NamespaceArgs,
+
+    /// Maximum number of retry attempts for Meilisearch connection
+    #[arg(long, env = "MEILI_MAX_RETRIES", default_value = "30")]
+    max_retries: u32,
 }
 
 #[derive(Args)]
@@ -252,9 +258,31 @@ pub async fn init(kube_client: &::kube::Client, args: &MeilisearchArgs) -> Resul
         _ => serde_json::json!(["*"]),
     };
 
-    // Create meilisearch client and fetch API keys
+    // Create meilisearch client and fetch API keys with retry
     let client = Client::new(&args.host, Some(master_key.expose_secret()))?;
-    let (search_key, admin_key) = get_api_keys(&client).await?;
+    let (search_key, admin_key) = 'retry: {
+        let mut last_error = None;
+
+        for attempt in 0..args.max_retries {
+            let backoff_secs = std::cmp::min(30, 1u64 << attempt);
+
+            match get_api_keys(&client).await {
+                Ok(keys) => break 'retry keys,
+                Err(e) => {
+                    last_error = Some(e);
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        max_retries = args.max_retries,
+                        backoff_secs = backoff_secs,
+                        "Failed to fetch API keys from Meilisearch, retrying"
+                    );
+                    sleep(StdDuration::from_secs(backoff_secs)).await;
+                }
+            }
+        }
+
+        return Err(last_error.unwrap_or_else(|| anyhow!("Max retries exceeded")));
+    };
 
     let mut failures = Vec::new();
 
