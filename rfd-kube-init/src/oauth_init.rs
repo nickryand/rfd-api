@@ -4,7 +4,10 @@
 
 use anyhow::{anyhow, Context, Result};
 use clap::Args;
+use reqwest_middleware::ClientBuilder;
+use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 use crate::kube;
 
@@ -20,6 +23,14 @@ struct InitResponse {
     client_id: String,
     secret: String,
     redirect_uris: Vec<String>,
+}
+
+/// Result of calling the /init endpoint
+enum InitResult {
+    /// Successfully initialized, contains the response
+    Success(InitResponse),
+    /// System was already initialized (409 Conflict)
+    AlreadyInitialized,
 }
 
 #[derive(Args)]
@@ -39,6 +50,10 @@ pub struct OAuthInitArgs {
     /// Name of the secret to create in target namespaces
     #[arg(long, env = "OAUTH_SECRET_NAME", default_value = "rfd-oauth-client")]
     secret_name: String,
+
+    /// Maximum number of retry attempts for the /init endpoint
+    #[arg(long, env = "OAUTH_MAX_RETRIES", default_value = "30")]
+    max_retries: u32,
 }
 
 /// Initialize OAuth client and distribute credentials to target namespaces.
@@ -58,8 +73,15 @@ pub async fn init(kube_client: &::kube::Client, args: &OAuthInitArgs) -> Result<
         "Initializing OAuth client"
     );
 
-    // Call the /init endpoint
-    let client = reqwest::Client::new();
+    // Build retry-enabled HTTP client
+    let retry_policy = ExponentialBackoff::builder()
+        .retry_bounds(Duration::from_secs(1), Duration::from_secs(30))
+        .build_with_max_retries(args.max_retries);
+
+    let client = ClientBuilder::new(reqwest::Client::new())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build();
+
     let init_url = format!("{}/init", args.host.trim_end_matches('/'));
 
     let request_body = InitRequest {
@@ -70,34 +92,15 @@ pub async fn init(kube_client: &::kube::Client, args: &OAuthInitArgs) -> Result<
 
     let response = client
         .post(&init_url)
-        .json(&request_body)
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_string(&request_body)?)
         .send()
         .await
         .context("Failed to send request to /init endpoint")?;
 
-    let status = response.status();
-
-    let init_response: InitResponse = match status {
-        reqwest::StatusCode::CONFLICT => {
-            tracing::warn!("System already initialized (409 Conflict), skipping");
-            return Ok(());
-        }
-        reqwest::StatusCode::OK => response
-            .json()
-            .await
-            .context("Failed to parse /init response")?,
-        _ => {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            tracing::error!(status = %status, error = %error_text, "Failed to initialize OAuth client");
-            return Err(anyhow!(
-                "Failed to initialize OAuth client: {} - {}",
-                status,
-                error_text
-            ));
-        }
+    let init_response = match handle_init_response(response).await? {
+        InitResult::Success(response) => response,
+        InitResult::AlreadyInitialized => return Ok(()),
     };
 
     tracing::info!(
@@ -148,4 +151,34 @@ pub async fn init(kube_client: &::kube::Client, args: &OAuthInitArgs) -> Result<
     }
 
     Ok(())
+}
+
+/// Process the HTTP response from the /init endpoint.
+async fn handle_init_response(response: reqwest::Response) -> Result<InitResult> {
+    let status = response.status();
+
+    match status {
+        reqwest::StatusCode::CONFLICT => {
+            tracing::warn!("System already initialized (409 Conflict), skipping");
+            Ok(InitResult::AlreadyInitialized)
+        }
+        reqwest::StatusCode::OK | reqwest::StatusCode::CREATED => {
+            let parsed = response
+                .json()
+                .await
+                .context("Failed to parse /init response")?;
+            Ok(InitResult::Success(parsed))
+        }
+        _ => {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            Err(anyhow!(
+                "Failed to initialize OAuth client: {} - {}",
+                status,
+                error_text
+            ))
+        }
+    }
 }
