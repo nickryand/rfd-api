@@ -1,13 +1,14 @@
 # rfd-kube-init
 
-A Kubernetes initialization tool that distributes secrets across namespaces. Supports Meilisearch tenant token generation and RFD API OAuth client initialization.
+A Kubernetes initialization tool that distributes secrets across namespaces. Currently supports Meilisearch tenant token generation.
 
 ## Overview
 
-This tool is designed to run as a Kubernetes Job or init container. It provides subcommands for different initialization tasks:
+This tool is designed to run as a Kubernetes Job or init container. It conditionally initializes secrets based on which environment variables are configured:
 
-- **meilisearch**: Reads the master key from Kubernetes, generates tenant tokens, and writes them to secrets in target namespaces
-- **oauth-init**: Calls the RFD API `/init` endpoint to create an OAuth client and distributes credentials to target namespaces
+- **Meilisearch**: If `MEILI_MASTER_NAMESPACE`, `MEILI_MASTER_SECRET_NAME`, and `MEILI_MASTER_SECRET_KEY` are set, reads the master key from Kubernetes, generates tenant tokens, and writes them to secrets in target namespaces
+
+If a feature's required environment variables are not set (or empty), that feature is skipped.
 
 ## Meilisearch Environment Variables
 
@@ -193,78 +194,3 @@ See [Meilisearch Tenant Tokens documentation](https://www.meilisearch.com/docs/l
 - If any namespace write fails, the tool logs to stderr and continues processing remaining namespaces
 - The tool exits with code 1 if any operation failed, code 0 if all succeeded
 - Check Job/Pod logs for detailed error messages
-
-## OAuth Init
-
-The `oauth-init` subcommand initializes an OAuth client by calling the RFD API `/init` endpoint and distributes the credentials to target namespaces.
-
-### OAuth Init Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `RFD_API_HOST` | Yes | RFD API host URL (e.g., `http://rfd-api:8080`) |
-| `OAUTH_REDIRECT_URIS` | Yes | Comma-delimited list of redirect URIs for the OAuth client |
-| `OAUTH_TARGET_NAMESPACES` | Yes | Comma-delimited list of namespaces to write credentials to |
-| `OAUTH_SECRET_NAME` | No | Name of the secret to create (default: `rfd-oauth-client`) |
-
-### OAuth Init Response
-
-The `/init` endpoint returns the OAuth client credentials:
-
-```json
-{
-  "client_id": "01234567-89ab-cdef-0123-456789abcdef",
-  "secret": "rfd_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz",
-  "redirect_uris": [
-    "https://app.example.com/callback",
-    "http://localhost:3000/callback"
-  ]
-}
-```
-
-### OAuth Init Secret Format
-
-The tool creates an `Opaque` secret with the following data:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: rfd-oauth-client  # or OAUTH_SECRET_NAME
-type: Opaque
-stringData:
-  OAUTH_CLIENT_ID: <client-id>
-  OAUTH_CLIENT_SECRET: <secret>
-```
-
-### OAuth Init Idempotency
-
-The `oauth-init` command is idempotent. If the system has already been initialized (409 Conflict), the command logs a warning and exits successfully. This allows the Kubernetes Job to be run multiple times without error.
-
-### Example: OAuth Init Kubernetes Job
-
-```yaml
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: rfd-oauth-init
-  namespace: rfd-system
-spec:
-  template:
-    spec:
-      serviceAccountName: rfd-kube-init
-      restartPolicy: OnFailure
-      containers:
-        - name: init
-          image: ghcr.io/oxidecomputer/rfd-kube-init:latest
-          args: ["oauth-init"]
-          env:
-            - name: RFD_API_HOST
-              value: "http://rfd-api.rfd-system:8080"
-            - name: OAUTH_REDIRECT_URIS
-              value: "https://app.example.com/callback,http://localhost:3000/callback"
-            - name: OAUTH_TARGET_NAMESPACES
-              value: "rfd-web,rfd-api"
-            - name: OAUTH_SECRET_NAME
-              value: "rfd-oauth-client"
-```

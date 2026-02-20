@@ -12,9 +12,9 @@ use std::fmt::Debug;
 use v_model::storage::{ListPagination, StoreError};
 
 use crate::{
-    db::InitializationModel, schema_ext::PdfSource, CommitSha, Job, NewJob, NewRfd, NewRfdPdf,
-    NewRfdRevision, Rfd, RfdId, RfdMeta, RfdPdf, RfdPdfId, RfdPdfs, RfdRevision, RfdRevisionId,
-    RfdRevisionMeta, RfdRevisionPdf,
+    schema_ext::PdfSource, CommitSha, Job, NewJob, NewRfd, NewRfdPdf, NewRfdRevision, Rfd, RfdId,
+    RfdMeta, RfdPdf, RfdPdfId, RfdPdfs, RfdRevision, RfdRevisionId, RfdRevisionMeta,
+    RfdRevisionPdf,
 };
 
 #[cfg(feature = "mock")]
@@ -29,7 +29,6 @@ pub trait RfdStorage:
     + RfdPdfStore
     + RfdPdfsStore
     + JobStore
-    + InitializationStore
     + Send
     + Sync
     + 'static
@@ -43,7 +42,6 @@ impl<T> RfdStorage for T where
         + RfdPdfStore
         + RfdPdfsStore
         + JobStore
-        + InitializationStore
         + Send
         + Sync
         + 'static
@@ -339,11 +337,4 @@ pub trait JobStore {
     async fn upsert(&self, new_job: NewJob) -> Result<Job, StoreError>;
     async fn start(&self, id: i32) -> Result<Option<Job>, StoreError>;
     async fn complete(&self, id: i32) -> Result<Option<Job>, StoreError>;
-}
-
-#[cfg_attr(feature = "mock", automock)]
-#[async_trait]
-pub trait InitializationStore {
-    async fn get(&self) -> Result<Option<InitializationModel>, StoreError>;
-    async fn insert(&self, record: InitializationModel) -> Result<InitializationModel, StoreError>;
 }
