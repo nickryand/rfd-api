@@ -6,6 +6,8 @@ dist
 config.toml
 mappers.toml
 !.cargo/config.toml
+!compose/config.toml
+!compose/mappers.toml
 
 spec.toml
 key.json
@@ -19,3 +21,4 @@ node_modules
 /config/
 local_data
 .env
+.gondolin.json

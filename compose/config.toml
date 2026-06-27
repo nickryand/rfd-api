@@ -1,0 +1,85 @@
+# Local podman-compose configuration for rfd-api.
+
+# Allowed values: json, pretty
+log_format = "pretty"
+
+# Optional directory to write log files to. If not specified, logs are written to stdout.
+# log_directory = "/tmp/rfd-api-logs"
+
+# Config file to load initial mappers and groups from.
+initial_mappers = "/config/mappers.toml"
+
+# Public URL of the service as accessed from the host.
+public_url = "http://localhost:8080"
+
+# Port for the server to run on inside the container.
+server_port = 8080
+
+# Database connection configuration.
+[database]
+host = "postgres"
+port = 5432
+user = "rfd"
+password = "rfd"
+database = "rfd"
+
+# Settings for JWT management.
+[jwt]
+default_expiration = 3600
+
+[[keys]]
+kind = "local_signer"
+kid = "local-dev"
+private = { path = "/run/secrets/JWT_PRIVATE_KEY" }
+
+[[keys]]
+kind = "local_verifier"
+kid = "local-dev"
+public = { path = "/run/secrets/JWT_PUBLIC_KEY" }
+
+# rfd-site handles GitHub login in this compose setup.
+[authn]
+
+# Magic link authentication disabled for local compose.
+[magic_link]
+templates = []
+
+# Search configuration.
+[search]
+host = "http://meilisearch:7700"
+key = { path = "/run/secrets/MEILI_MASTER_KEY" }
+index = "rfd"
+
+# Fields for use in generating the OpenAPI spec file. Uncomment to write a spec at startup.
+# [spec]
+# title = "RFD API"
+# description = "Local RFD API"
+# contact_url = ""
+# contact_email = ""
+# output_path = "/tmp/rfd-api-spec.json"
+
+# Templates used when creating RFDs.
+[content.templates.placeholder]
+template = """"""
+required_fields = []
+
+[content.templates.new]
+template = """"""
+required_fields = []
+
+# The GitHub repository to use to write RFDs.
+[services.github]
+# Provided by RFD_GITHUB_* Podman secrets in compose.yml.
+owner = ""
+repo = ""
+path = ""
+default_branch = ""
+
+# App Installation
+[services.github.auth]
+# Provided by RFD_GITHUB_APP_ID Podman secret in compose.yml.
+app_id = 0
+# Provided by RFD_GITHUB_INSTALLATION_ID Podman secret in compose.yml.
+installation_id = 0
+# PEM encoded private key for the GitHub App.
+private_key = { path = "/run/secrets/RFD_GITHUB_PRIVATE_KEY" }

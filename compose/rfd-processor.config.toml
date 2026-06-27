@@ -1,0 +1,72 @@
+# Local podman-compose configuration for rfd-processor.
+
+# Allowed values: json, pretty
+log_format = "pretty"
+log_filter = "debug"
+
+# Controls if the processor should run.
+processor_enabled = true
+processor_batch_size = 10
+processor_interval = 30
+processor_update_mode = "read"
+processor_capacity = 4
+
+# Controls if the scanner should run.
+scanner_enabled = true
+scanner_interval = 900
+
+# The list of actions that should be run for each processing job.
+actions = [
+  # "CopyImagesToStorage",
+  "UpdateSearch",
+  # "UpdatePdfs",
+  # "CreatePullRequest",
+  # "UpdatePullRequest",
+  # "UpdateDiscussionUrl",
+  # "EnsureRfdWithPullRequestIsInValidState",
+  # "EnsureRfdOnDefaultIsInValidState",
+]
+
+# Database connection configuration.
+[database]
+host = "postgres"
+port = 5432
+user = "rfd"
+password = "rfd"
+database = "rfd"
+
+# GitHub App installation with access to the configured repository.
+[auth.github]
+# Provided by RFD_GITHUB_APP_ID Podman secret in compose.yml.
+app_id = 0
+# Provided by RFD_GITHUB_INSTALLATION_ID Podman secret in compose.yml.
+installation_id = 0
+# PEM encoded private key for the GitHub App.
+private_key = { path = "/run/secrets/RFD_GITHUB_PRIVATE_KEY" }
+
+# The GitHub repository to use to read and write RFDs.
+[source]
+# Provided by RFD_GITHUB_* Podman secrets in compose.yml.
+owner = ""
+repo = ""
+path = ""
+default_branch = ""
+
+# Static asset storage for images extracted from RFDs.
+# Uncomment and fill these in if enabling CopyImagesToStorage.
+# [[s3_storage]]
+# bucket = ""
+# region = ""
+# endpoint = ""
+
+# Location to store generated PDFs.
+# Uncomment and fill this in if enabling UpdatePdfs.
+# [pdf_storage]
+# drive = ""
+# folder = ""
+
+# Search backend for indexing RFD contents.
+[[search_storage]]
+host = "http://meilisearch:7700"
+key = { path = "/run/secrets/MEILI_MASTER_KEY" }
+index = "rfd"
